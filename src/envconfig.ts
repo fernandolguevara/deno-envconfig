@@ -146,7 +146,6 @@ const parseMarksConfig = (
 
       const extractRuneValue = (runeVal: string) => {
         let len = runeVal.indexOf("`");
-        len = len > -1 ? len : runeVal.indexOf(" ");
         len = len > -1 ? len : runeVal.length;
         return { length: len, value: runeVal.substring(0, len) };
       };
@@ -986,6 +985,47 @@ describe("parse()", () => {
 
       assertEquals(result.myEnvVar, "HELLO");
     });
+    it("when `string should parse spaced values from env", () => {
+      const env = {
+        myEnvVar: "hello hello",
+      };
+
+      const conf = {
+        myEnvVar: "`string",
+      };
+
+      const result = parse(env, conf);
+
+      assertEquals(result.myEnvVar, "hello hello");
+    });
+    it("when `string`default:hello hello should parse spaced values from default", () => {
+      const env = {
+        myEnvVar: undefined,
+      };
+
+      const conf = {
+        myEnvVar: "`string`default:hello hello",
+      };
+
+      const result = parse(env, conf);
+
+      assertEquals(result.myEnvVar, "hello hello");
+    });
+
+    it("when `default:hello hello`string should parse spaced values from default", () => {
+      const env = {
+        myEnvVar: undefined,
+      };
+
+      const conf = {
+        myEnvVar: "`default:hello hello`string",
+      };
+
+      const result = parse(env, conf);
+
+      assertEquals(result.myEnvVar, "hello hello");
+    });
+
     it("when `string`lowercase should parse lowercased from env", () => {
       const env = {
         myEnvVar: "HELLO",
