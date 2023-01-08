@@ -1,0 +1,22 @@
+{
+  "fmt": {
+    "files": {
+      "exclude": ["dist"]
+    }
+  },
+  "tasks": {
+    "dev": "deno test --watch ./src/env.ts",
+    "lint": "deno lint && deno fmt --check",
+    "fmt": "deno fmt",
+    "update": "deno run --allow-read=./ --allow-net --allow-write=./ https://deno.land/x/deno_outdated@0.2.4/cli.ts --ignore README.md CHANGELOG.md CONTRIBUTING.md"
+  },
+  "lint": {
+    "files": {
+      "include": ["src/"]
+    },
+    "rules": {
+      "tags": ["recommended"],
+      "exclude": ["no-explicit-any"]
+    }
+  }
+}
