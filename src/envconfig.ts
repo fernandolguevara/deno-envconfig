@@ -451,9 +451,10 @@ export const parse = <
 >(
   vars: T,
   config: C,
-  options: { debug?: boolean; prefix?: string[] } = {
+  options: { debug?: boolean; prefix?: string[]; suffix?: string[] } = {
     debug: false,
     prefix: undefined,
+    suffix: undefined,
   },
 ): any => {
   if (typeof vars !== "object") {
@@ -480,13 +481,29 @@ export const parse = <
     { suffix, prefix }: { suffix?: string[]; prefix?: string[] },
   ) => {
     const varKey = varsKeys.find((k) => {
-      let tempKey = `${prefix?.join("") || ""}${key}${suffix?.join("") || ""}`;
+      let _prefix = undefined as string[] | undefined;
+      let _suffix = undefined as string[] | undefined;
+
+      if (prefix?.length) {
+        _prefix = prefix?.filter(Boolean);
+      }
+
+      if (suffix?.length) {
+        _suffix = suffix?.filter(Boolean);
+      }
+
+      let tempKey = `${_prefix?.join("") || ""}${key}${
+        _suffix?.join("") || ""
+      }`;
 
       if (k.toLowerCase() === tempKey.toLowerCase()) {
         return true;
       }
 
-      tempKey = `${prefix?.join("_") || ""}_${key}_${suffix?.join("_") || ""}`;
+      tempKey = `${_prefix?.join("_") || ""}_${key}_${
+        _suffix?.join("_") || ""
+      }`;
+
       tempKey = tempKey.endsWith("_")
         ? tempKey.substring(0, tempKey.length - 1)
         : tempKey;
@@ -504,10 +521,17 @@ export const parse = <
   for (const [key, conf] of configs) {
     try {
       if (typeof conf === "object") {
+        const __prefix = conf.__prefix ?? key;
+        const __suffix = conf.__suffix ?? "";
+        delete conf.__prefix;
+        delete conf.__suffix;
+
         const child = parse({ ...__env }, conf, {
           ...options,
-          prefix: [...options.prefix || [], key] as string[],
+          prefix: [...options.prefix || [], __prefix] as string[],
+          suffix: [...options?.suffix || [], __suffix] as string[],
         });
+
         env[key] = child;
       } else {
         if (!conf) {
@@ -1401,5 +1425,30 @@ describe("complex marks", () => {
     const parsed = parse(env, config);
 
     assertEquals(parsed.myapp.super.nest.port, 3003);
+  });
+
+  it("should parse super nested `number with prefix override", () => {
+    const env = {
+      MYAPP_SUB_P1: "1",
+      MYAPP_SUB_P2: "2",
+      MYAPP_SUB_P3: "3",
+    };
+
+    const config = {
+      myapp: {
+        ignoredPrefix: {
+          __prefix: "",
+          sub: {
+            p1: "`number",
+            p2: "`number",
+            p3: "`number",
+          },
+        },
+      },
+    };
+
+    const parsed = parse(env, config);
+
+    assertEquals(parsed.myapp.ignoredPrefix.sub, { p1: 1, p2: 2, p3: 3 });
   });
 });
