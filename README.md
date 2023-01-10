@@ -35,6 +35,15 @@ this library is based on
 - `format
 ```
 
+### alises
+
+```md
+- `string[] =`string `split_values
+- `bool[] =`bool `split_values
+- `date[] =`date `split_values
+- `number[] =`number `split_values
+```
+
 ## Example
 
 ```typescript

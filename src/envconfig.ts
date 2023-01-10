@@ -35,7 +35,16 @@ const invalidValueError = (r: string, k: string, c: string, v: unknown) =>
     `should have a valid value ex: \`${r}:my-val, val:${JSON.stringify(v)}`,
   );
 
+const trueValues = ["y", "yes", "true", "t", "on", "1", true, 1];
+
 const types = ["number", "date", "string", "bool"];
+
+const aliases = {
+  "string[]": { type: "string", split_values: true },
+  "number[]": { type: "number", split_values: true },
+  "bool[]": { type: "bool", split_values: true },
+  "date[]": { type: "date", split_values: true },
+};
 
 const toggleMarks = Object.entries({
   "split_values": undefined,
@@ -107,6 +116,7 @@ const parseMarksConfig = (
   } else if (typeof conf === "string") {
     const metadata = {
       type: "unkown",
+      alias: "unkown",
       // key marks
       key: key as string,
       prefix: undefined as string[] | undefined,
@@ -198,6 +208,17 @@ const parseMarksConfig = (
       }
 
       const type = rune.substring(1);
+      const alias = aliases[type as keyof typeof aliases];
+      if (alias) {
+        metadata.alias = type;
+
+        for (const [key, value] of Object.entries(alias)) {
+          (metadata as any)[key] = value as any;
+        }
+
+        continue;
+      }
+
       if (types.some((t) => type.startsWith(t))) {
         if (metadata.type !== "unkown") {
           throw duplicateMarkError(rune, key, conf);
@@ -332,7 +353,64 @@ describe("parseMarksConfig()", () => {
       });
     }
 
+    describe("`aliases", () => {
+      it("when use myEnvKey`string[], output should be {type:'string',split_values:true}", () => {
+        const var_key = "myEnvKey";
+        const metadataig = "`string[]";
+
+        const metadata = parseMarksConfig(var_key, metadataig);
+
+        assertEquals(metadata.type, "string");
+        assertEquals(metadata.split_values, true);
+        assertEquals(metadata.alias, "string[]");
+      });
+
+      it("when use myEnvKey`bool[], output should be {type:'bool',split_values:true}", () => {
+        const var_key = "myEnvKey";
+        const metadataig = "`bool[]";
+
+        const metadata = parseMarksConfig(var_key, metadataig);
+
+        assertEquals(metadata.type, "bool");
+        assertEquals(metadata.split_values, true);
+        assertEquals(metadata.alias, "bool[]");
+      });
+
+      it("when use myEnvKey`number[], output should be {type:'bool',split_values:true}", () => {
+        const var_key = "myEnvKey";
+        const metadataig = "`number[]";
+
+        const metadata = parseMarksConfig(var_key, metadataig);
+
+        assertEquals(metadata.type, "number");
+        assertEquals(metadata.split_values, true);
+        assertEquals(metadata.alias, "number[]");
+      });
+
+      it("when use myEnvKey`date[], output should be {type:'date',split_values:true}", () => {
+        const var_key = "myEnvKey";
+        const metadataig = "`date[]";
+
+        const metadata = parseMarksConfig(var_key, metadataig);
+
+        assertEquals(metadata.type, "date");
+        assertEquals(metadata.split_values, true);
+        assertEquals(metadata.alias, "date[]");
+      });
+    });
+
     describe("`types modifiers", () => {
+      describe("`format mark", () => {
+        it("when use myEnvKey`format:my-format, output should be {format:'my-format'}", () => {
+          const var_key = "myEnvKey";
+          const metadataig = "`format:my-format";
+
+          const metadata = parseMarksConfig(var_key, metadataig);
+
+          assertEquals(metadata.format, "my-format");
+        });
+      });
+
       describe("`string mark", () => {
         it("when `string should parse", () => {
           const var_key = "myEnvKey";
@@ -575,10 +653,12 @@ export const parse = <
           case type === "bool":
             if (split_values) {
               env[key] = (val?.split(",") || "").map((v: string) =>
-                v === "true"
+                trueValues.includes(
+                  v.toLowerCase(),
+                )
               );
             } else {
-              env[key] = ["y", "yes", "true", "t", "on", "1", true, 1].includes(
+              env[key] = trueValues.includes(
                 val.toLowerCase(),
               );
             }
@@ -1527,6 +1607,90 @@ describe("complex marks", () => {
           maxIndexKeys: "32",
         },
       },
+    });
+  });
+
+  describe("`aliases", () => {
+    it("should parse alias `number[] from env", () => {
+      const env = {
+        MYAPP_PORT: "1,2,3,4",
+      };
+
+      const config = {
+        myapp: {
+          port: "`number[]",
+        },
+      };
+
+      const parsed = parse(env, config);
+
+      assertEquals(parsed.myapp.port, [1, 2, 3, 4]);
+    });
+
+    it("should parse alias `string[] from env", () => {
+      const env = {
+        MYAPP_PORT: "1,2,3,4",
+      };
+
+      const config = {
+        myapp: {
+          port: "`string[]",
+        },
+      };
+
+      const parsed = parse(env, config);
+
+      assertEquals(parsed.myapp.port, ["1", "2", "3", "4"]);
+    });
+
+    it("should parse alias `bool[] from env", () => {
+      const env = {
+        MYAPP_PORT: "1,t,true,y,yes,on,0,off,no,n,false,f",
+      };
+
+      const config = {
+        myapp: {
+          myFlags: "`env:PORT`bool[]",
+        },
+      };
+
+      const parsed = parse(env, config);
+
+      assertEquals(parsed.myapp.myFlags, [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+      ]);
+    });
+
+    it("should parse alias `date[] from env", () => {
+      const env = {
+        MYAPP_PORT:
+          "1989-05-19T00:00:00.000Z,1989-05-20T00:00:00.000Z,1989-05-21T00:00:00.000Z",
+      };
+
+      const config = {
+        myapp: {
+          myDates: "`env:PORT`date[]",
+        },
+      };
+
+      const parsed = parse(env, config);
+
+      assertEquals(parsed.myapp.myDates, [
+        new Date("1989-05-19T00:00:00.000Z"),
+        new Date("1989-05-20T00:00:00.000Z"),
+        new Date("1989-05-21T00:00:00.000Z"),
+      ]);
     });
   });
 });
