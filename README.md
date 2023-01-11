@@ -24,29 +24,119 @@ this library is based on
 
 ### modifiers
 
-```md
-- `env
-- `prefix
-- `suffix
-- `split_words
-- `split_values
-- `uppercase
-- `lowercase
-- `format
+```
+`env
 ```
 
-### alises
+```ts
+const env = { MYAPP_PORT: "3003" };
+const envconfig = {
+  port: "`env:MYAPP_PORT`number`default:3000",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { port: 3000 }
+```
 
-```md
-- `string[] =`string `split_values
-- `bool[] =`bool `split_values
-- `date[] =`date `split_values
-- `number[] =`number `split_values
+```
+`prefix
+```
+
+```ts
+const env = { MYAPP_PORT: "3003" };
+const envconfig = {
+  port: "`prefix:MYAPP`number`default:3000",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { port: 3000 }
+```
+
+```
+`prefix
+```
+
+```ts
+const env = { MYAPP_PORT_AWESOME: "3003" };
+const envconfig = {
+  port: "`prefix:MYAPP`suffix:AWESOME`number`default:3000",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { port: 3000 }
+```
+
+```
+`split_words
+```
+
+```ts
+const env = { MYAPP_PORT_AWESOME: "3003" };
+const envconfig = {
+  myappPortAwesome: "`split_words`number`default:3000",
+  // lookup "myapp_port_awesome" on env object
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { port: 3000 }
+```
+
+```
+`split_values
+```
+
+```ts
+const env = { LIST: "1,2,3" };
+const envconfig = {
+  list: "`split_value`number`default:4,5,6",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { list: [1,2,3] }
+```
+
+```
+`uppercase
+```
+
+```ts
+const env = { super_key: "uppercase" };
+const envconfig = {
+  super_key: "`uppercase`string",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { super_key: "UPPERCASE" }
+```
+
+```
+`lowercase
+```
+
+```ts
+const env = { super_key: "LOWERCASE" };
+const envconfig = {
+  super_key: "`lowercase`string",
+} as const;
+const e = parse(env, envconfig);
+console.log(e);
+// output = { super_key: "lowercase" }
+```
+
+- `format
+
+### Alises
+
+```
+- `string[] = `string`split_values
+- `bool[] = `bool`split_values
+- `date[] = `date`split_values
+- `number[] = `number`split_values
 ```
 
 ## Example
 
-```typescript
+```ts
 const _envconfig = {
   log: {
     level: "`string`default:DEBUG",
@@ -87,10 +177,19 @@ const _envconfig = {
       maxIndexKeys: "`string`default:32",
     },
   },
-};
+} as const;
+// using "as const" the parse function generates the output structure
+// check the examples/envconfig.ts folder
 
-const e = parse({}, _envconfig);
-/*  {
+const env = Deno.env.toObject();
+
+const e = parse(env, _envconfig);
+
+console.log(e);
+```
+
+```js
+{
   log: { level: "DEBUG" },
   server: { hostname: "0.0.0.0", port: 3003 },
   app: {
@@ -120,5 +219,12 @@ const e = parse({}, _envconfig);
       maxIndexKeys: "32",
     },
   },
-} */
+}
 ```
+
+### IntelliSense
+
+parse function generates the output structure when "as const" is used on the
+configuration object
+
+check the [examples/envconfig.ts](/examples/envconfig.ts) folder
