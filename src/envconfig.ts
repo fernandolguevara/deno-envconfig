@@ -8,7 +8,14 @@ import {
 } from "../deps.ts";
 
 export class ConfigurationInvalidError extends Error {}
+
 export class ArgumentInvalidError extends Error {}
+
+type ConfigValue = undefined | string | {
+  [key: string]: string | undefined | Config;
+};
+
+export type Config = Record<string, ConfigValue>;
 
 const configErrorMessage = (r: string, k: string, c: string) =>
   `mark: "\`${r}" config: "${c}" on key: "${k}"`;
@@ -523,18 +530,116 @@ describe("parseMarksConfig()", () => {
   });
 });
 
+type IncludesMark<
+  Code extends string,
+  Mark extends string,
+  T = unknown,
+  F = unknown,
+> = Code extends `${infer _}${Mark}${infer _}` ? T : F;
+
+type SplitValuesMark<Code extends string, T = unknown, F = unknown> =
+  IncludesMark<
+    `${Code}`,
+    "`split_values",
+    T,
+    F
+  >;
+
+type RequiredMark<Code extends string, T = unknown, F = unknown> = IncludesMark<
+  `${Code}`,
+  "`required",
+  T,
+  F
+>;
+
+type GenericTypeMarkExtractor<
+  Mark extends string,
+  Code extends string,
+  T extends
+    | string
+    | boolean
+    | number
+    | Date,
+> = IncludesMark<
+  `${Code}`,
+  `\`${Mark}[]`,
+  RequiredMark<`${Code}`, T[], T[] | undefined>,
+  IncludesMark<
+    `${Code}`,
+    `\`${Mark}`,
+    RequiredMark<
+      `${Code}`,
+      SplitValuesMark<`${Code}`, T[], T>,
+      SplitValuesMark<`${Code}`, T[] | undefined, T | undefined>
+    >
+  >
+>;
+
+type BoolMarkExtractor<Code extends string> = GenericTypeMarkExtractor<
+  "bool",
+  `${Code}`,
+  boolean
+>;
+
+type NumberMarkExtractor<Code extends string> = GenericTypeMarkExtractor<
+  "number",
+  `${Code}`,
+  number
+>;
+
+type StringMarkExtractor<Code extends string> = GenericTypeMarkExtractor<
+  "string",
+  `${Code}`,
+  string
+>;
+
+type DateMarkExtractor<Code extends string> = GenericTypeMarkExtractor<
+  "date",
+  `${Code}`,
+  Date
+>;
+
+// type Bool2MarkExtractor<Code extends string> = IncludesMark<
+//   `${Code}`,
+//   "`bool[]",
+//   RequiredMark<`${Code}`, boolean[], boolean[] | undefined>,
+//   IncludesMark<
+//     `${Code}`,
+//     "`bool",
+//     RequiredMark<
+//       `${Code}`,
+//       SplitValuesMark<`${Code}`, boolean[], boolean>,
+//       SplitValuesMark<`${Code}`, boolean[] | undefined, boolean | undefined>
+//     >
+//   >
+// >;
+
+type TypeMarkExtractor<Code extends string> =
+  & BoolMarkExtractor<`${Code}`>
+  & NumberMarkExtractor<`${Code}`>
+  & StringMarkExtractor<`${Code}`>
+  & DateMarkExtractor<`${Code}`>;
+
+type Output<T extends Config = Config> = {
+  [key in keyof Omit<T, "__prefix" | "__suffix">]: T[key] extends Config
+    ? Output<T[key]>
+    : T[key] extends `${infer _}\`${infer _}` ? TypeMarkExtractor<`${T[key]}`>
+    : T[key] extends string ? TypeMarkExtractor<`${T[key]}`>
+    : T[key];
+};
+
 export const parse = <
-  T = any,
-  C = any,
+  T = unknown,
+  C extends Config = Config,
 >(
-  vars: T,
-  config: C,
+  vars?: T,
+  config?: C,
   options: { debug?: boolean; prefix?: string[]; suffix?: string[] } = {
     debug: false,
     prefix: undefined,
     suffix: undefined,
   },
-): any => {
+): Output<C> => {
   if (typeof vars !== "object") {
     throw new ArgumentInvalidError("vars argument need to be an object");
   }
@@ -542,7 +647,7 @@ export const parse = <
     throw new ArgumentInvalidError("config argument need to be an object");
   }
   const __env: any = vars || {};
-  const env: Record<string, unknown> = options.debug ? { __env } : {},
+  const env: any = options.debug ? { __env } : {},
     varsKeys = Object.keys(__env),
     configKeys = Object.keys(config);
 
@@ -891,8 +996,8 @@ describe("parse()", () => {
       };
 
       const conf = {
-        myEnvVar: "`split_values`date",
-      };
+        myEnvVar: "`date`split_values",
+      } as const;
 
       const result = parse(env, conf);
 
@@ -911,7 +1016,7 @@ describe("parse()", () => {
       const conf = {
         myEnvVar:
           "`split_values`date`default:1989-05-20T00:00:00.000Z,1989-05-20T00:00:00.000Z,1989-05-20T00:00:00.000Z",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -945,9 +1050,9 @@ describe("parse()", () => {
 
         const conf = {
           myEnvVar: `\`default:${input}\`date`,
-        };
+        } as const;
 
-        if (Error !== expected) {
+        if (expected instanceof Date) {
           const result = parse(env, conf);
 
           assertEquals(result, { myEnvVar: expected });
@@ -963,11 +1068,11 @@ describe("parse()", () => {
 
         const conf = {
           myEnvVar: "`date",
-        };
+        } as const;
 
-        if (Error !== expected) {
+        if (expected instanceof Date) {
           const result = parse(env, conf);
-
+          result.myEnvVar;
           assertEquals(result, { myEnvVar: expected });
         } else {
           assertThrows(() => parse(env, conf));
@@ -978,7 +1083,7 @@ describe("parse()", () => {
 
   describe("`bool", () => {
     for (
-      const [input, expected] of [
+      const [input, expected] of <Array<[string, boolean]>> [
         ["true", true],
         ["yes", true],
         ["on", true],
@@ -997,7 +1102,7 @@ describe("parse()", () => {
 
         const conf = {
           myEnvVar: `\`default:${input}\`bool`,
-        };
+        } as const;
 
         const result = parse(env, conf);
 
@@ -1011,7 +1116,7 @@ describe("parse()", () => {
 
         const conf = {
           myEnvVar: "`bool",
-        };
+        } as const;
 
         const result = parse(env, conf);
 
@@ -1083,7 +1188,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`string`uppercase",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1096,7 +1201,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`string",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1109,7 +1214,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`string`default:hello hello",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1123,7 +1228,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`default:hello hello`string",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1137,7 +1242,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`string`lowercase",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1164,7 +1269,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`split_values`string",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1178,7 +1283,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`split_values`string`default:1,2,3",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1260,7 +1365,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`split_values`number",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1274,7 +1379,7 @@ describe("parse()", () => {
 
       const conf = {
         myEnvVar: "`split_values`number`default:1,2,3",
-      };
+      } as const;
 
       const result = parse(env, conf);
 
@@ -1315,9 +1420,9 @@ describe("parse()", () => {
 
           const conf = {
             myEnvVar: `\`default:${input}\`number`,
-          };
+          } as const;
 
-          if (Error !== expected) {
+          if (typeof expected === "number") {
             const result = parse(env, conf);
 
             assertEquals(result, { myEnvVar: expected });
@@ -1338,8 +1443,9 @@ describe("parse()", () => {
 
           const conf = {
             myEnvVar: "`number",
-          };
-          if (Error !== expected) {
+          } as const;
+
+          if (typeof expected === "number") {
             const result = parse(env, conf);
 
             assertEquals(result, { myEnvVar: expected });
@@ -1388,7 +1494,7 @@ describe("complex marks", () => {
           superSecret: "`string`env:SECRETS`prefix:myapp`suffix:secret2",
         },
       },
-    };
+    } as const;
 
     // parse marks
     const parsed = parse(env, config);
@@ -1428,7 +1534,7 @@ describe("complex marks", () => {
       port: "`number",
       s1: "`string`env:SECRETS_SECRET1",
       s2: "`string`env:SECRETS_SECRET2",
-    };
+    } as const;
 
     const parsed = parse(env, config, { prefix: ["myapp"] });
 
@@ -1444,7 +1550,7 @@ describe("complex marks", () => {
 
     const config = {
       port: undefined,
-    };
+    } as const;
 
     const parsed = parse(env, config, { prefix: ["myapp"] });
 
@@ -1460,7 +1566,7 @@ describe("complex marks", () => {
       myapp: {
         port: undefined,
       },
-    };
+    } as const;
 
     const parsed = parse(env, config);
 
@@ -1480,7 +1586,7 @@ describe("complex marks", () => {
           },
         },
       },
-    };
+    } as const;
 
     const parsed = parse(env, config);
 
@@ -1500,7 +1606,7 @@ describe("complex marks", () => {
           },
         },
       },
-    };
+    } as const;
 
     const parsed = parse(env, config);
 
@@ -1525,7 +1631,7 @@ describe("complex marks", () => {
           },
         },
       },
-    };
+    } as const;
 
     const parsed = parse(env, config);
 
@@ -1573,7 +1679,7 @@ describe("complex marks", () => {
           maxIndexKeys: "`string`default:32",
         },
       },
-    };
+    } as const;
 
     const e = parse({}, _envconfig);
 
@@ -1620,7 +1726,7 @@ describe("complex marks", () => {
         myapp: {
           port: "`number[]",
         },
-      };
+      } as const;
 
       const parsed = parse(env, config);
 
@@ -1636,7 +1742,7 @@ describe("complex marks", () => {
         myapp: {
           port: "`string[]",
         },
-      };
+      } as const;
 
       const parsed = parse(env, config);
 
@@ -1652,7 +1758,7 @@ describe("complex marks", () => {
         myapp: {
           myFlags: "`env:PORT`bool[]",
         },
-      };
+      } as const;
 
       const parsed = parse(env, config);
 
@@ -1682,7 +1788,7 @@ describe("complex marks", () => {
         myapp: {
           myDates: "`env:PORT`date[]",
         },
-      };
+      } as const;
 
       const parsed = parse(env, config);
 
