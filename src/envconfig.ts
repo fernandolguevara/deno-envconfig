@@ -51,6 +51,7 @@ const aliases = {
   "number[]": { type: "number", split_values: true },
   "bool[]": { type: "bool", split_values: true },
   "date[]": { type: "date", split_values: true },
+  "boolean": { type: "bool" },
 };
 
 const toggleMarks = Object.entries({
@@ -361,6 +362,16 @@ describe("parseMarksConfig()", () => {
     }
 
     describe("`aliases", () => {
+      it("when use myEnvKey`boolean, output should be {type:'bool'}", () => {
+        const var_key = "myEnvKey";
+        const metadataig = "`boolean";
+
+        const metadata = parseMarksConfig(var_key, metadataig);
+
+        assertEquals(metadata.type, "bool");
+        assertEquals(metadata.alias, "boolean");
+      });
+
       it("when use myEnvKey`string[], output should be {type:'string',split_values:true}", () => {
         const var_key = "myEnvKey";
         const metadataig = "`string[]";
@@ -599,21 +610,6 @@ type DateMarkExtractor<Code extends string> = GenericTypeMarkExtractor<
   Date
 >;
 
-// type Bool2MarkExtractor<Code extends string> = IncludesMark<
-//   `${Code}`,
-//   "`bool[]",
-//   RequiredMark<`${Code}`, boolean[], boolean[] | undefined>,
-//   IncludesMark<
-//     `${Code}`,
-//     "`bool",
-//     RequiredMark<
-//       `${Code}`,
-//       SplitValuesMark<`${Code}`, boolean[], boolean>,
-//       SplitValuesMark<`${Code}`, boolean[] | undefined, boolean | undefined>
-//     >
-//   >
-// >;
-
 type TypeMarkExtractor<Code extends string> =
   & BoolMarkExtractor<`${Code}`>
   & NumberMarkExtractor<`${Code}`>
@@ -631,6 +627,7 @@ type Output<T extends Config = Config> = {
 export const parse = <
   T = unknown,
   C extends Config = Config,
+  O extends Output<C> = Output<C>,
 >(
   vars?: T,
   config?: C,
@@ -639,7 +636,7 @@ export const parse = <
     prefix: undefined,
     suffix: undefined,
   },
-): Output<C> => {
+): O => {
   if (typeof vars !== "object") {
     throw new ArgumentInvalidError("vars argument need to be an object");
   }

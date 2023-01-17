@@ -41,9 +41,7 @@ const envconfig = {
   },
 } as const;
 
-const out = parse(env, envconfig);
-
-type OutType = typeof out;
+const out = parse<any, typeof envconfig>(env, envconfig);
 
 // bool[]
 out.myapp.bool.optionalAliasArray;
