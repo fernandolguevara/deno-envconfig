@@ -750,6 +750,11 @@ export const parse = <
               env[key] = (val?.split(",") || "").map(Number);
             } else {
               env[key] = Number(val);
+              if (
+                !required && typeof original === "undefined" && isNaN(env[key])
+              ) {
+                env[key] = undefined;
+              }
             }
             break;
           case type === "bool":
@@ -812,7 +817,11 @@ export const parse = <
           type === "number" &&
           (!split_values && isNaN(val) || split_values && val?.some(isNaN))
         ) {
-          throw invalidNumberError(key, original, val);
+          if (!required && typeof original === "undefined") {
+            val = env[key] = undefined;
+          } else {
+            throw invalidNumberError(key, original, val);
+          }
         }
 
         if (
@@ -1608,6 +1617,18 @@ describe("complex marks", () => {
     const parsed = parse(env, config);
 
     assertEquals(parsed.myapp.super.nest.port, 3003);
+  });
+
+  it("should parse undefined on `number", () => {
+    const env = {};
+
+    const config = {
+      port: "`number",
+    } as const;
+
+    const parsed = parse(env, config);
+
+    assertEquals(parsed.port, undefined);
   });
 
   it("should parse super nested `number with prefix override", () => {
